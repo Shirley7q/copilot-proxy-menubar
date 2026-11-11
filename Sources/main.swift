@@ -44,8 +44,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private var loginItem: NSMenuItem!
     private var loginApprovalItem: NSMenuItem!
     private var detailItem: NSMenuItem!
+    private var claudeItem: NSMenuItem!
     private var quitItem: NSMenuItem!
     private var terminating = false
+    private var loadingClaudeModels = false
+
+    private var endpoints: ProxyEndpoints { ProxyEndpoints(port: controller?.port ?? 4399) }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -106,7 +110,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         loginApprovalItem = item("在系统设置中允许自动启动…", #selector(openLoginSettings), symbol: "gearshape")
         menu.addItem(loginApprovalItem)
         menu.addItem(.separator())
-        menu.addItem(item("复制 API 地址", #selector(copyEndpoint), symbol: "doc.on.doc"))
+        menu.addItem(item("复制 Codex / OpenAI API 地址", #selector(copyEndpoint), symbol: "doc.on.doc"))
+        menu.addItem(item("复制 Claude / Anthropic API 地址", #selector(copyClaudeEndpoint), symbol: "doc.on.doc"))
+        claudeItem = item("配置 Claude Code…", #selector(configureClaude), symbol: "terminal")
+        menu.addItem(claudeItem)
+        menu.addItem(.separator())
         menu.addItem(item("打开诊断面板", #selector(openDashboard), symbol: "gauge.with.dots.needle.50percent"))
         menu.addItem(item("查看日志", #selector(openLogs), symbol: "doc.text.magnifyingglass"))
         menu.addItem(item("使用说明", #selector(showHelp), symbol: "questionmark.circle"))
@@ -143,6 +151,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         disableItem.state = state == .stopped ? .on : .off
         takeOverItem.isHidden = state != .external
         takeOverItem.toolTip = "将短暂重启代理，然后由菜单栏应用管理。"
+        claudeItem.title = loadingClaudeModels ? "正在读取 Claude 模型…" : "配置 Claude Code…"
+        claudeItem.isEnabled = controller != nil && !state.busy && !loadingClaudeModels
+        claudeItem.toolTip = "选择可用模型，复制 Claude Code 启动命令。"
         detailItem.title = controller?.detail ?? "请安装 copilot-proxy 和 Node.js"
         if detailItem.title.count > 34 {
             detailItem.toolTip = detailItem.title
@@ -184,8 +195,72 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func openLoginSettings() { SMAppService.openSystemSettingsLoginItems() }
 
     @objc private func copyEndpoint() {
+        copyToClipboard(endpoints.openAI)
+    }
+
+    @objc private func copyClaudeEndpoint() {
+        copyToClipboard(endpoints.anthropic)
+    }
+
+    private func copyToClipboard(_ text: String) {
         NSPasteboard.general.clearContents()
-        NSPasteboard.general.setString("\(controller?.endpoint ?? "http://127.0.0.1:4399")/v1", forType: .string)
+        NSPasteboard.general.setString(text, forType: .string)
+    }
+
+    @objc private func configureClaude() {
+        guard let controller = controller, !loadingClaudeModels else { return }
+        guard controller.state.active else {
+            showError("请先点击 Enable，等待显示 Enabled 后再配置 Claude Code。")
+            return
+        }
+        loadingClaudeModels = true
+        update()
+        Task {
+            defer { loadingClaudeModels = false; update() }
+            do {
+                let models = try await ClaudeConfiguration.loadModels(port: controller.port)
+                guard controller.state.active, !terminating else { return }
+                try showClaudeConfiguration(models, port: controller.port)
+            } catch { showError(error.localizedDescription) }
+        }
+    }
+
+    private func showClaudeConfiguration(_ models: [ClaudeModel], port: Int) throws {
+        let alert = NSAlert()
+        alert.messageText = "连接 Claude Code"
+        alert.informativeText = "选择当前 Copilot 账号可用的 Claude 模型，复制命令后在项目目录的终端中粘贴运行。\n\n需要已安装 Claude Code，并保持代理 Enabled。配置仅用于本次启动，可与 Codex 同时使用。"
+        let fields = NSView(frame: NSRect(x: 0, y: 0, width: 440, height: 100))
+        let primary = NSPopUpButton(frame: NSRect(x: 100, y: 61, width: 340, height: 26))
+        let small = NSPopUpButton(frame: NSRect(x: 100, y: 19, width: 340, height: 26))
+        for (label, y) in [("主模型", 66), ("快速模型", 24)] {
+            let text = NSTextField(labelWithString: label)
+            text.frame = NSRect(x: 0, y: y, width: 96, height: 20)
+            fields.addSubview(text)
+        }
+        primary.addItems(withTitles: models.map(\.title))
+        small.addItems(withTitles: models.map(\.title))
+        let defaults = UserDefaults.standard
+        let primaryIndex = models.firstIndex { $0.id == defaults.string(forKey: "claudeModel") }
+            ?? models.lastIndex { $0.id.hasPrefix("claude-sonnet-") } ?? 0
+        let smallIndex = models.firstIndex { $0.id == defaults.string(forKey: "claudeSmallModel") }
+            ?? models.lastIndex { $0.id.hasPrefix("claude-haiku-") } ?? primaryIndex
+        primary.selectItem(at: primaryIndex)
+        small.selectItem(at: smallIndex)
+        primary.setAccessibilityLabel("Claude 主模型")
+        small.setAccessibilityLabel("Claude 快速模型")
+        fields.addSubview(primary)
+        fields.addSubview(small)
+        alert.accessoryView = fields
+        alert.addButton(withTitle: "复制启动命令")
+        alert.addButton(withTitle: "取消")
+        NSApp.activate(ignoringOtherApps: true)
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        let model = models[primary.indexOfSelectedItem]
+        let smallModel = models[small.indexOfSelectedItem]
+        let command = try ClaudeConfiguration.launchCommand(port: port, model: model, smallModel: smallModel)
+        copyToClipboard(command)
+        defaults.set(model.id, forKey: "claudeModel")
+        defaults.set(smallModel.id, forKey: "claudeSmallModel")
     }
 
     @objc private func openDashboard() {
@@ -202,7 +277,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     @objc private func showHelp() {
         let alert = NSAlert()
         alert.messageText = "Copilot Proxy"
-        alert.informativeText = "Enable 启动代理，Disable 暂停代理。\n\n启用“登录 Mac 时自动启动”后，应用会在登录时恢复上次的 Enable / Disable 状态。\n\n如果显示“终端运行中”，点“切换到后台运行”后即可关掉原终端；切换会短暂重启代理。\n\n退出应用会停止由应用启动的代理。再次打开会恢复上次状态。\n\nAPI 地址：http://127.0.0.1:4399/v1\n继续使用已安装的 copilot-proxy、Node.js 和已有账号。"
+        alert.informativeText = "Enable 启动代理，Disable 暂停代理。\n\n启用“登录 Mac 时自动启动”后，应用会在登录时恢复上次的 Enable / Disable 状态。\n\n如果显示“终端运行中”，点“切换到后台运行”后即可关掉原终端；切换会短暂重启代理。\n\n退出应用会停止由应用启动的代理。再次打开会恢复上次状态。\n\nCodex / OpenAI：\(endpoints.openAI)\nClaude / Anthropic：\(endpoints.anthropic)\n\n点击“配置 Claude Code…”选择模型并复制启动命令，在项目目录的终端中运行。Codex 与 Claude Code 可以同时连接。\n继续使用已安装的 copilot-proxy、Node.js 和已有账号。"
         alert.addButton(withTitle: "知道了")
         NSApp.activate(ignoringOtherApps: true)
         alert.runModal()

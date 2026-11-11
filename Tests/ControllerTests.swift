@@ -5,7 +5,7 @@ import Darwin
 struct ControllerTests {
     @MainActor
     static func main() async {
-        do { try await run(); print("PASS: all lifecycle checks"); exit(0) }
+        do { try await run(); print("PASS: all lifecycle and client configuration checks"); exit(0) }
         catch { fputs("FAIL: \(error.localizedDescription)\n", stderr); exit(1) }
     }
 
@@ -27,6 +27,7 @@ struct ControllerTests {
     static func run() async throws {
         let installed = try Runtime.discover()
         let fixture = URL(fileURLWithPath: CommandLine.arguments[1]).resolvingSymlinksInPath()
+        try ClaudeConfigurationTests.run(fixture: fixture)
         let runtime = Runtime(node: installed.node, cli: fixture)
         let temporary = FileManager.default.temporaryDirectory.appendingPathComponent("copilot-menubar-tests-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: temporary, withIntermediateDirectories: true)
@@ -43,11 +44,18 @@ struct ControllerTests {
         try require(controller.state == .stopped, "Disabled preference must not start the proxy")
         await controller.enable()
         try await waitFor(controller, .running)
+        let claudeModels = try await ClaudeConfiguration.loadModels(port: port)
+        try require(claudeModels.count == 2, "Read direct Claude models from the running proxy diagnostics endpoint")
+        print("PASS: Claude model discovery over HTTP")
         let ownedPID = ProcessInspector.listeners(port: port).first!
         try require(ProcessInspector.isProxy(pid: ownedPID, runtime: runtime), "Must recognize the exact child argv")
         try await controller.disable()
         try require(ProcessInspector.listeners(port: port).isEmpty, "Disable must release the port")
         try require(!defaults.bool(forKey: "proxyEnabled"), "Disable must persist")
+        var unavailable = false
+        do { _ = try await ClaudeConfiguration.loadModels(port: port) }
+        catch { unavailable = true }
+        try require(unavailable, "Report an unavailable proxy instead of generating an unverified model choice")
         print("PASS: Enable, readiness, Disable, saved state, port cleanup")
 
         let external = Process()

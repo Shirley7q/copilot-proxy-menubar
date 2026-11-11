@@ -1,5 +1,14 @@
 # 更新记录
 
+## v1.1.0 — 2026-11-11
+
+- 新增 Claude Code 配置入口：读取当前账号支持 Messages 的 Claude 模型，选择主模型和快速模型并复制会话启动命令。
+- 分别提供 Codex / OpenAI 与 Claude / Anthropic API 地址复制，支持两个客户端同时使用代理。
+- 记住 Claude 模型选择，按模型目录处理 1M 上下文；保留现有客户端配置文件。
+- 增加模型筛选、目录错误、HTTP 获取及 Bash / Zsh 启动参数测试。
+
+生命周期和 Claude 配置自动化测试已通过，Intel 与 Apple Silicon 通用构建已完成。Claude Code 真实对话和 Apple Silicon 实机运行尚未验证。
+
 ## v1.0.0 — 2026-09-08
 
 首次发布独立 macOS 桌面菜单栏 App。

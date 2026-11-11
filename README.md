@@ -26,6 +26,7 @@
 | **接管终端进程** | 将已经在终端运行的代理切换为 App 后台管理 |
 | **登录自启** | 登录 Mac 后自动打开 App，并恢复上次的开关状态 |
 | **诊断和日志** | 打开诊断面板、查看日志、复制 API 地址 |
+| **Codex 与 Claude Code** | 同时连接同一个代理，为 Claude Code 选择模型并复制启动命令 |
 
 App 常驻菜单栏，不占用 Dock。底层代理能力由 [Copilot Proxy](https://github.com/Jer-y/copilot-proxy) 提供；本项目负责 macOS 桌面界面、启停管理和登录自启。
 
@@ -73,9 +74,29 @@ copilot-proxy auth
 http://127.0.0.1:4399/v1
 ```
 
-也可以使用菜单中的“复制 API 地址”。App 沿用底层代理已有的登录信息，无需重复输入账号。
+也可以使用菜单中的“复制 Codex / OpenAI API 地址”。App 沿用底层代理已有的登录信息，无需重复输入账号。
 
-### 3. 从终端切换到后台
+### 3. 连接 Claude Code
+
+1. 按 [Claude Code 官方说明](https://code.claude.com/docs/en/quickstart)安装客户端，确保终端可运行 `claude`。
+2. 在菜单中点击 **Enable**，等待显示 **Enabled**。
+3. 点击“**配置 Claude Code…**”，选择主模型和快速模型，再点击“**复制启动命令**”。
+4. 在终端进入你的项目目录，粘贴并执行命令。下次通过代理启动 Claude Code 时，再次运行该命令即可。
+
+App 从正在运行的代理读取模型目录，只列出当前账号支持原生 Messages 接口的 Claude 模型。默认优先选择可用的 Sonnet 和 Haiku，并记住你的选择；支持 1M 上下文的模型会使用相应的 Claude Code selector。模型目录仅表明路由可用，实际请求仍取决于账号权限、额度及上游服务。
+
+生成的命令通过 `claude --model … --settings …` 设置本次会话的代理地址、占位认证和模型映射，不修改 `~/.claude/settings.json`、项目配置或 Codex 配置。原有权限与工具设置继续由 Claude Code 管理。配置方式参考 [Claude Code 命令行文档](https://code.claude.com/docs/en/cli-reference)及安装版本附带的 Copilot Proxy 文档。
+
+| 客户端 | API 基础地址 | 菜单入口 |
+| --- | --- | --- |
+| Codex / OpenAI | `http://127.0.0.1:4399/v1` | 复制 Codex / OpenAI API 地址 |
+| Claude Code / Anthropic | `http://127.0.0.1:4399` | 配置 Claude Code… / 复制 Claude / Anthropic API 地址 |
+
+Claude 的基础地址**不带 `/v1`**，客户端会自行请求 `/v1/messages`。Claude Code 与 Codex 可以同时使用；Disable 或退出 App 会影响连接该代理的两个客户端。本功能面向 Claude Code 命令行客户端。
+
+如果提示没有可用模型，请在诊断面板检查账号与模型权限。如果提示 `claude: command not found`，请先完成 Claude Code 安装。启动后可用 `/status` 确认 Anthropic base URL 指向本地代理，详见 [Claude Code 网关接入文档](https://code.claude.com/docs/en/llm-gateway-connect)。
+
+### 4. 从终端切换到后台
 
 如果代理已经在终端运行，App 会显示 **Enabled · 终端运行中**，首次打开不会打断现有连接。
 
@@ -125,14 +146,14 @@ bash build.sh
 # 构建 Intel 与 Apple Silicon 通用 App
 bash build.sh --universal
 
-# 验证启停、接管、状态恢复和日志管理
+# 验证启停、接管、状态恢复、日志管理和 Claude 配置
 bash test.sh
 
 # 生成 DMG、ZIP 和 SHA-256 校验文件
 bash release.sh
 ```
 
-App 输出到 `build/Copilot Proxy.app`，发行文件输出到 `dist/`。测试使用空闲端口上的模拟服务，不停止正在使用的代理；运行测试也需要已安装 Node.js 和 Copilot Proxy。
+App 输出到 `build/Copilot Proxy.app`，发行文件输出到 `dist/`。测试使用空闲端口上的模拟服务，不停止正在使用的代理；运行测试也需要已安装 Node.js 和 Copilot Proxy。Claude 配置测试会在 Bash 和 Zsh 中用模拟客户端验证参数，不需要安装 Claude Code，也不发起真实模型请求。
 
 ## 卸载
 

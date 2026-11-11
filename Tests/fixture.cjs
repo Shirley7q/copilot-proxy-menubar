@@ -3,6 +3,10 @@ const index = process.argv.indexOf('--port');
 const port = Number(process.argv[index + 1]);
 const server = http.createServer((request, response) => {
   response.writeHead(200, { 'Content-Type': 'application/json' });
+  if (request.url === '/diagnostics') {
+    response.end(require('node:fs').readFileSync(require('node:path').join(__dirname, 'claude-diagnostics.json')));
+    return;
+  }
   response.end(JSON.stringify({ status: 'ready' }));
 });
 server.listen(port, '127.0.0.1', () => console.log('Fixture ready'));

@@ -6,6 +6,12 @@ Mac 菜单栏里的 Copilot Proxy 开关。
    如果已有可正常工作的 copilot-proxy start，可以跳过环境准备。
 3. 双击 App，在菜单栏中点击 Enable 开启、Disable 暂停。
 4. 如需关掉原终端，先点击“切换到后台运行”，等待显示 Enabled。
+5. 使用 Claude Code：先安装 claude 命令，再点击“配置 Claude Code…”，
+   选择模型并复制启动命令，在项目目录的终端中粘贴执行。
+   可与 Codex 同时使用；启动命令仅设置本次会话，不修改客户端配置文件。
+
+Codex / OpenAI 地址：http://127.0.0.1:4399/v1
+Claude / Anthropic 地址：http://127.0.0.1:4399（不带 /v1）
 
 首次运行默认注册登录项，可在菜单里关闭“登录 Mac 时自动启动”。
 自动启动会恢复上次的 Enable / Disable 状态。
@@ -16,6 +22,7 @@ Mac 菜单栏里的 Copilot Proxy 开关。
 此安装包不包含 Node.js、代理引擎或账号凭据。
 需要 macOS 13+；Universal App 包含 Intel 和 Apple Silicon 架构。
 v1.0.0 已在 Intel Mac 测试；Apple Silicon 尚未实机验证。
+v1.1.0 已通过生命周期及 Claude 配置自动化测试；Claude Code 真实对话尚未验证。
 
 完整文档：https://github.com/Shirley7q/copilot-proxy-menubar
 底层引擎与致谢：https://github.com/Jer-y/copilot-proxy

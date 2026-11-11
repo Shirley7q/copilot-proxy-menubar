@@ -13,7 +13,7 @@ for APP_ARCH in "${APP_ARCHS[@]}"; do
   APP_BINARY="$PROJECT_DIR/build/CopilotProxyMenuBar-$APP_ARCH"
   /usr/bin/swiftc -swift-version 5 -O -target "$APP_ARCH-apple-macosx13.0" \
     -framework AppKit -framework ServiceManagement \
-    "$PROJECT_DIR/Sources/ProxyController.swift" "$PROJECT_DIR/Sources/main.swift" \
+    "$PROJECT_DIR/Sources/ProxyController.swift" "$PROJECT_DIR/Sources/ClaudeConfiguration.swift" "$PROJECT_DIR/Sources/main.swift" \
     -o "$APP_BINARY"
   APP_BINARIES+=("$APP_BINARY")
 done
